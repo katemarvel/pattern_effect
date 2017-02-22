@@ -98,7 +98,7 @@ def TOA_imbalance(typ):
         d[model] = rsdt_mod - (rlut_mod+rsut_mod)
     return d
         
-def scatterplot():
+def scatterplot(cmap=cm.viridis):
     H = TOA_imbalance("historical")
     A = TOA_imbalance("amip")
     x = []
@@ -110,6 +110,16 @@ def scatterplot():
             x+=[H[Hkey]]
             y+=[A[Akey]]
             k+=[Akey]
+    x=np.array(x)
+    y=np.array(y)
+    allmodels = np.array([x.split(".")[1] for x in k])
+    models = np.unique(allmodels)
+    L = float(len(models))
+    i=0
+    for model in models:
+        I = np.where(allmodels == model)[0]
+        plt.plot(x[I],y[I],"o",color=cmap(i/L))
+        i+=1
     return x,y,k
             
 
