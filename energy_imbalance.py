@@ -65,6 +65,7 @@ def generate_global_means(variables):
         hwrite.write(vh)
         hwrite.close()
         awrite.close()
+
 def generate_amip_global_means(variables):
     hdirec = "/work/cmip5/amip4K/atm/mo/"
     adirec = "/work/cmip5/amipFuture/atm/mo/"
@@ -85,6 +86,28 @@ def generate_amip_global_means(variables):
         hwrite.write(vh)
         hwrite.close()
         awrite.close()
+
+def historical_global_mean_time(x):
+    start = '1979-1-1'
+    stop = '2006-1-1'
+    data = x(time=(start,stop))
+    
+    return cdutil.averager(data,axis='xy')
+
+
+def generate_global_mean_timeseries(experiment,variable):
+    hdirec = "/work/cmip5/"+experiment+"/atm/mo/"
+    
+    hpath = hdirec + variable+"/"
+    
+    hwrite = cdms.open("DATA/TIMESERIES/cmip5."+experiment+"."+variable+".nc","w")
+        
+    vh = cmip5.get_ensemble(hpath,variable,func=historical_global_mean_time)
+    vh.id = variable
+    vh.name = variable
+    hwrite.write(vh)
+    hwrite.close()
+    
 
 
 def TOA_imbalance(typ):
@@ -119,14 +142,14 @@ def TOA_imbalance(typ):
         d[model] = rsdt_mod - (rlut_mod+rsut_mod)
     return d
 from matplotlib.patches import Ellipse        
-def scatterplot(cmap=cm.Set1):
-    H = TOA_imbalance("historical")
-    A = TOA_imbalance("amip")
+def scatterplot(cmap=cm.Set1,xax = "historical",yax = "amip"):
+    H = TOA_imbalance(xax)
+    A = TOA_imbalance(yax)
     x = []
     y = []
     k=[]
     for Hkey in sorted(H.keys()):
-        Akey = Hkey.replace("historical","amip")
+        Akey = Hkey.replace(xax,yax)
         if Akey in A.keys():
             x+=[H[Hkey]]
             y+=[A[Akey]]
@@ -176,5 +199,10 @@ if __name__ == "__main__":
     TOA = {"rsdt":"TOA Incident Shortwave Radiation",\
             "rsut": "TOA Outgoing Shortwave Radiation",\
             "rlut": "TOA Outgoing Longwave Radiation"}
+
+    experiments = ["historical","amip","amip4K","amipFuture"]
     variables = TOA.keys()
-    generate_amip_global_means(variables)
+    for variable in variables:
+            for experiment in experiments:
+                    generate_global_mean_timeseries(experiment,variable)
+    
