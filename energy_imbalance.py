@@ -58,6 +58,27 @@ def generate_global_means(variables):
         va.id = variable
         va.name = variable
         awrite.write(va)
+        
+        vh = cmip5.get_ensemble(hpath,variable,func=historical_global_mean)
+        vh.id = variable
+        vh.name = variable
+        hwrite.write(vh)
+        hwrite.close()
+        awrite.close()
+def generate_amip_global_means(variables):
+    hdirec = "/work/cmip5/amip4K/atm/mo/"
+    adirec = "/work/cmip5/amipFuture/atm/mo/"
+    
+    for variable in variables:
+        hpath = hdirec + variable+"/"
+        apath = adirec+ variable+"/"
+        hwrite = cdms.open("DATA/cmip5.amip4K."+variable+".nc","w")
+        awrite = cdms.open("DATA/cmip5.amipFuture."+variable+".nc","w")
+        va = cmip5.get_ensemble(apath,variable,func=historical_global_mean)
+        va.id = variable
+        va.name = variable
+        awrite.write(va)
+        
         vh = cmip5.get_ensemble(hpath,variable,func=historical_global_mean)
         vh.id = variable
         vh.name = variable
@@ -97,8 +118,8 @@ def TOA_imbalance(typ):
         rlut_mod = RLUT[rlut_trunc.index(model)]
         d[model] = rsdt_mod - (rlut_mod+rsut_mod)
     return d
-        
-def scatterplot(cmap=cm.viridis):
+from matplotlib.patches import Ellipse        
+def scatterplot(cmap=cm.Set1):
     H = TOA_imbalance("historical")
     A = TOA_imbalance("amip")
     x = []
@@ -110,17 +131,38 @@ def scatterplot(cmap=cm.viridis):
             x+=[H[Hkey]]
             y+=[A[Akey]]
             k+=[Akey]
-    x=np.array(x)
-    y=np.array(y)
-    allmodels = np.array([x.split(".")[1] for x in k])
+    x=np.ma.array(x)
+    x = np.ma.masked_where(np.isnan(x),x)
+    y=np.ma.array(y)
+    y = np.ma.masked_where(np.isnan(y),y)
+    allmodels = np.array([thing.split(".")[1] for thing in k])
     models = np.unique(allmodels)
     L = float(len(models))
     i=0
+    dummy=[]
     for model in models:
         I = np.where(allmodels == model)[0]
-        plt.plot(x[I],y[I],"o",color=cmap(i/L))
+        
+        if not (True in y[I].mask):
+            if len(I) == 1:
+                plt.plot(x[I],y[I],"o",color=cmap(i/L),label=model,markersize=10)
+            else:
+                xi=x[I]
+                yi=y[I]
+                xy=(np.ma.average(xi),np.ma.average(yi))
+                stuff,=plt.plot(xi,yi,"o",color=cmap(i/L),label=model,markersize=10)
+                dummy+=[stuff]
+                
+                ell = Ellipse(xy=xy,width=(np.max(xi)-np.min(xi)),height = (np.max(yi)-np.min(yi)),angle=0)
+                ell.set_facecolor(cmap(i/L))
+                ell.set_label(model)
+                plt.gca().add_artist(ell)
         i+=1
-    return x,y,k
+    plt.xlim(-2,6)
+    plt.ylim(-2,6)
+    plt.legend(loc=0,ncol=2,numpoints=1)
+    [stuff.set_visible(False) for stuff in dummy]
+    
             
 
 
@@ -134,5 +176,5 @@ if __name__ == "__main__":
     TOA = {"rsdt":"TOA Incident Shortwave Radiation",\
             "rsut": "TOA Outgoing Shortwave Radiation",\
             "rlut": "TOA Outgoing Longwave Radiation"}
-    variables = surface.keys()
-    generate_global_means(variables)
+    variables = TOA.keys()
+    generate_amip_global_means(variables)
