@@ -107,7 +107,7 @@ def generate_global_mean_timeseries(experiment,variable):
     hpath = hdirec + variable+"/"
     
     hwrite = cdms.open("DATA/TIMESERIES/cmip5."+experiment+"."+variable+".nc","w")
-    if (experiment == "historical" or experiment == "amip"):
+    if ((experiment.find("historical")>=0) or (experiment.find("amip")>=0)):
         func = historical_global_mean_time
     elif experiment == "piControl":
         func = piC_global_mean_time
@@ -424,8 +424,8 @@ if __name__ == "__main__":
             "rsut": "TOA Outgoing Shortwave Radiation",\
             "rlut": "TOA Outgoing Longwave Radiation"}
 
-    experiments = ["historical","amip","amip4K","amipFuture","piControl"]
-    variables = TOA.keys()+surface.keys()+["tas"]
+    experiments = ["piControl","amip4K","amipFuture"]
+    variables = TOA.keys()+["tas"]
     for variable in variables:
             for experiment in experiments:
                     generate_global_mean_timeseries(experiment,variable)
