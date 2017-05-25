@@ -425,7 +425,7 @@ if __name__ == "__main__":
             "rlut": "TOA Outgoing Longwave Radiation"}
 
     experiments = ["piControl","amip4K","amipFuture"]
-    variables = TOA.keys()+["tas"]
+    variables = surface.keys()
     for variable in variables:
             for experiment in experiments:
                     generate_global_mean_timeseries(experiment,variable)
