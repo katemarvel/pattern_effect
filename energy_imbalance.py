@@ -424,7 +424,7 @@ if __name__ == "__main__":
             "rsut": "TOA Outgoing Shortwave Radiation",\
             "rlut": "TOA Outgoing Longwave Radiation"}
 
-    experiments = ["piControl","amip4K","amipFuture"]
+    experiments = ["historical","amip"]
     variables = surface.keys()
     for variable in variables:
             for experiment in experiments:
