@@ -145,7 +145,7 @@ def generate_zonal_mean_timeseries(experiment,variable):
     
     hpath = hdirec + variable+"/"
     
-    hwrite = cdms.open("DATA/TIMESERIES/cmip5."+experiment+"."+variable+".nc","w")
+    hwrite = cdms.open("DATA/TIMESERIES/ZONAL/cmip5."+experiment+"."+variable+".nc","w")
     if ((experiment.find("historical")>=0) or (experiment.find("amip")>=0)):
         func = historical_zonal_mean_time
     elif experiment == "piControl":
