@@ -116,8 +116,46 @@ def generate_global_mean_timeseries(experiment,variable):
     vh.name = variable
     hwrite.write(vh)
     hwrite.close()
-    
 
+def historical_zonal_mean_time(x):
+    fobs = cdms.open("sst.mnmean.v4.nc")
+    sst_obs = fobs["sst"]
+    obs_grid = sst_obs.getGrid()
+    
+    start = '1979-1-1'
+    stop = '2006-1-1'
+    data = x(time=(start,stop))
+    data_regrid = data.regrid(obs_grid,regridTool='regrid2')
+    fobs.close()
+    return cdutil.averager(data_regrid,axis='x')
+
+def piC_global_mean_time(x):
+    fobs = cdms.open("sst.mnmean.v4.nc")
+    sst_obs = fobs["sst"]
+    obs_grid = sst_obs.getGrid()
+    
+    data = x[:200*12]
+    
+    data_regrid = data.regrid(obs_grid,regridTool='regrid2')
+    fobs.close()
+    return cdutil.averager(data_regrid,axis='x')
+    
+def generate_zonal_mean_timeseries(experiment,variable):
+    hdirec = "/work/cmip5/"+experiment+"/atm/mo/"
+    
+    hpath = hdirec + variable+"/"
+    
+    hwrite = cdms.open("DATA/TIMESERIES/cmip5."+experiment+"."+variable+".nc","w")
+    if ((experiment.find("historical")>=0) or (experiment.find("amip")>=0)):
+        func = historical_zonal_mean_time
+    elif experiment == "piControl":
+        func = piC_zonal_mean_time
+    vh = cmip5.get_ensemble(hpath,variable,func=func)
+    vh.id = variable
+    vh.name = variable
+    hwrite.write(vh)
+    hwrite.close()
+    
 
 def TOA_imbalance_dec(typ):
     variable = "rsdt"
@@ -425,10 +463,13 @@ if __name__ == "__main__":
             "rlut": "TOA Outgoing Longwave Radiation"}
 
     experiments = ["historical","amip"]
-    variables = surface.keys()
+    variables = TOA.keys()+["tas","rsutcs","rlutcs"]
     for variable in variables:
             for experiment in experiments:
-                    generate_global_mean_timeseries(experiment,variable)
+                    generate_zonal_mean_timeseries(experiment,variable)
+    generate_global_mean_timeseries("historical","rlutcs")
+    generate_global_mean_timeseries("amip","rlutcs")
+    
     
 def get_forcing(typ="giss"):
     if typ == "giss":
