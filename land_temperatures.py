@@ -40,10 +40,11 @@ import CMIP5_tools as cmip5
 
 f = cdms.open("DATA/TIMESERIES/cmip5.amip.ts.nc")
 
-land_ts = MV.zeros(f["ts"].shape)
+land_ts = MV.zeros(f["ts"].shape)+1.e20
 models = eval(f["ts"].getAxis(0).models)
 i=0
 for model in models:
+    print model
     land=cmip5.landfrac(model)
     fland = cdms.open(land)
     lf = fland("sftlf")
@@ -51,7 +52,10 @@ for model in models:
     ts = ft("ts",time=('1979-1-1','2005-12-31'))
     bigland = np.repeat(lf.asma()[np.newaxis,:,:],ts.shape[0],axis=0)
     land_only_mask =cdutil.averager(MV.masked_where(bigland<100.,ts),axis='xy')
-    land_ts[i] = land_only_mask
+    try:
+        land_ts[i] = land_only_mask
+    except:
+        print "problem with "+model
     i+=1
     fland.close()
     ft.close()
