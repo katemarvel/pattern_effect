@@ -45,6 +45,8 @@ models = eval(f["ts"].getAxis(0).models)
 i=0
 for model in models:
     print model
+    if model.find("WARN")>=0:
+        continue
     try:
         land=cmip5.landfrac(model)
         fland = cdms.open(land)
