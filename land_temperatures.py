@@ -45,14 +45,15 @@ models = eval(f["ts"].getAxis(0).models)
 i=0
 for model in models:
     print model
-    land=cmip5.landfrac(model)
-    fland = cdms.open(land)
-    lf = fland("sftlf")
-    ft = cdms.open(model)
-    ts = ft("ts",time=('1979-1-1','2005-12-31'))
-    bigland = np.repeat(lf.asma()[np.newaxis,:,:],ts.shape[0],axis=0)
-    land_only_mask =cdutil.averager(MV.masked_where(bigland<100.,ts),axis='xy')
     try:
+        land=cmip5.landfrac(model)
+        fland = cdms.open(land)
+        lf = fland("sftlf")
+        ft = cdms.open(model)
+        ts = ft("ts",time=('1979-1-1','2005-12-31'))
+        bigland = np.repeat(lf.asma()[np.newaxis,:,:],ts.shape[0],axis=0)
+        land_only_mask =cdutil.averager(MV.masked_where(bigland<100.,ts),axis='xy')
+ 
         land_ts[i] = land_only_mask
     except:
         print "problem with "+model
