@@ -133,7 +133,7 @@ def historical_zonal_mean_time(x):
     fobs.close()
     return cdutil.averager(data_regrid,axis='x')
 
-def piC_global_mean_time(x):
+def piC_zonal_mean_time(x):
     fobs = cdms.open("sst.mnmean.v4.nc")
     sst_obs = fobs["sst"]
     obs_grid = sst_obs.getGrid()
@@ -301,10 +301,10 @@ def scatterplot_ensemble_average(cmap=cm.Set1,xax = "historical",yax = "amip"):
     He = {}
     A = TOA_imbalance(yax)
     badA = {}
-    Ae = {}
+    scatterx = {}
     
     
-    scatterx = []
+    Ae = []
     scattery = []
     k=[]
     for Hkey in sorted(H.keys()):
