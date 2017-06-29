@@ -95,9 +95,11 @@ def historical_global_mean_time(x):
     return cdutil.averager(data,axis='xy')
 
 
+
+
 def piC_global_mean_time(x):
     
-    data = x[:200*12]
+    data = x[-50*12:]
     
     return cdutil.averager(data,axis='xy')
 
@@ -110,6 +112,8 @@ def generate_global_mean_timeseries(experiment,variable):
     if ((experiment.find("historical")>=0) or (experiment.find("amip")>=0)):
         func = historical_global_mean_time
     elif experiment == "piControl":
+        func = piC_global_mean_time
+    elif experiment == "abrupt4xCO2":
         func = piC_global_mean_time
     vh = cmip5.get_ensemble(hpath,variable,func=func)
     vh.id = variable
@@ -155,8 +159,10 @@ def generate_zonal_mean_timeseries(experiment,variable):
     vh.name = variable
     hwrite.write(vh)
     hwrite.close()
-    
 
+
+
+    
 def TOA_imbalance_dec(typ):
     variable = "rsdt"
     fwrite = cdms.open("DATA/cmip5."+typ+"."+variable+".nc")
@@ -462,13 +468,18 @@ if __name__ == "__main__":
             "rsut": "TOA Outgoing Shortwave Radiation",\
             "rlut": "TOA Outgoing Longwave Radiation"}
 
-    experiments = ["historical","amip"]
-    variables = TOA.keys()+["tas","rsutcs","rlutcs"]
+    # experiments = ["historical","amip"]
+    # variables = TOA.keys()+["tas","rsutcs","rlutcs"]
+    # for variable in variables:
+    #         for experiment in experiments:
+    #                 generate_zonal_mean_timeseries(experiment,variable)
+    #generate_global_mean_timeseries("historical","ts")
+
+    #generate_global_mean_timeseries("amip","ts")
+    variables = TOA.keys()+["tas"]
     for variable in variables:
-            for experiment in experiments:
-                    generate_zonal_mean_timeseries(experiment,variable)
-    generate_global_mean_timeseries("historical","rlutcs")
-    generate_global_mean_timeseries("amip","rlutcs")
+        generate_global_mean_timeseries("abrupt4xCO2",variable)
+        generate_global_mean_timeseries("piControl",variable)
     
     
 def get_forcing(typ="giss"):
