@@ -65,7 +65,14 @@ def low_cloud_diff(clisccp):
     plev_ax = clisccp_all_od.getAxisIds().index("plev")
     low = MV.sum(clisccp_all_od(level=(1000*100,440.*100)),axis=plev_ax)(time=('1979-1-1','2005-12-31'))
     cdutil.setTimeBoundsMonthly(low)
-    return last_ten_minus_first_ten(cdutil.YEAR(low))
+    the_diff= last_ten_minus_first_ten(cdutil.YEAR(low))
+
+    fobs = cdms.open("/work/marvel1/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
+    the_grid = fobs["clt"].getGrid()
+    the_diff_regrid = the_diff.regrid(the_grid,regridTool='regrid2')
+    fobs.close()
+    return the_diff_regrid
+    
 def ensemble_AMIP_LCC():
     direc = "/work/cmip5/amip/atm/mo/clisccp/"
     variable="clisccp"
