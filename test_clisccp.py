@@ -84,3 +84,27 @@ def ensemble_AMIP_LCC():
     return AMIP_LCC
 
     
+def ensemble_AMIP_RSUT():
+    direc = "/work/cmip5/amip/atm/mo/rsut/"
+    variable="rsut"
+    AMIP_RSUT = cmip5.get_ensemble(direc,variable,func=low_cloud_diff)
+    AMIP_RSUT.id = "rsut"
+    f = cdms.open("AMIP_RSUT.nc","w")
+    f.write(AMIP_RSUT)
+    f.close()
+    return AMIP_RSUT
+
+def ensemble_AMIP_RSUTCS():
+    direc = "/work/cmip5/amip/atm/mo/rsutcs/"
+    variable="rsutcs"
+    AMIP_RSUTCS = cmip5.get_ensemble(direc,variable,func=low_cloud_diff)
+    AMIP_RSUTCS.id = "rsutcs"
+    f = cdms.open("AMIP_RSUTCS.nc","w")
+    f.write(AMIP_RSUTCS)
+    f.close()
+    return AMIP_RSUTCS
+
+AMIP_RSUT = ensemble_AMIP_RSUT()
+AMIP_RSUTCS = ensemble_AMIP_RSUTCS()
+
+
