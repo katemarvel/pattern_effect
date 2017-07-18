@@ -56,14 +56,24 @@ def last_ten_minus_first_ten(X):
     return diff_ten
 
 
-def low_cloud_diff(fname):
-    f=cdms.open(fname)
-    clisccp = f("clisccp")
+def low_cloud_diff(clisccp):
+    #f=cdms.open(fname)
+    #clisccp = f("clisccp")
     axes = clisccp.getAxisIds()
     tau_ax = axes.index("tau")
     clisccp_all_od = MV.sum(clisccp,axis=tau_ax)
     plev_ax = clisccp_all_od.getAxisIds().index("plev")
-    low = MV.sum(clisccp_all_od(level=(1000*100,440.*100)),axis=plev_ax)
+    low = MV.sum(clisccp_all_od(level=(1000*100,440.*100)),axis=plev_ax)(time=('1979-1-1','2005-12-31'))
     cdutil.setTimeBoundsMonthly(low)
     return last_ten_minus_first_ten(cdutil.YEAR(low))
+def ensemble_AMIP_LCC():
+    direc = "/work/cmip5/amip/atm/mo/clisccp/"
+    variable="clisccp"
+    AMIP_LCC = cmip5.get_ensemble(direc,variable,func=low_cloud_diff)
+    AMIP_LCC.id = "lcc"
+    f = cdms.open("AMIP_LCC.nc","w")
+    f.write(AMIP_LCC)
+    f.close()
+    return AMIP_LCC
+
     
