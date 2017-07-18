@@ -83,11 +83,23 @@ def ensemble_AMIP_LCC():
     f.close()
     return AMIP_LCC
 
+
+def rsut_diff(X):
+    
+    Xt=X(time=('1979-1-1','2005-12-31'))
+    cdutil.setTimeBoundsMonthly(X)
+    the_diff= last_ten_minus_first_ten(cdutil.YEAR(X))
+
+    fobs = cdms.open("/work/marvel1/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
+    the_grid = fobs["clt"].getGrid()
+    the_diff_regrid = the_diff.regrid(the_grid,regridTool='regrid2')
+    fobs.close()
+    return the_diff_regrid
     
 def ensemble_AMIP_RSUT():
     direc = "/work/cmip5/amip/atm/mo/rsut/"
     variable="rsut"
-    AMIP_RSUT = cmip5.get_ensemble(direc,variable,func=low_cloud_diff)
+    AMIP_RSUT = cmip5.get_ensemble(direc,variable,func=rsut_diff)
     AMIP_RSUT.id = "rsut"
     f = cdms.open("AMIP_RSUT.nc","w")
     f.write(AMIP_RSUT)
@@ -97,7 +109,7 @@ def ensemble_AMIP_RSUT():
 def ensemble_AMIP_RSUTCS():
     direc = "/work/cmip5/amip/atm/mo/rsutcs/"
     variable="rsutcs"
-    AMIP_RSUTCS = cmip5.get_ensemble(direc,variable,func=low_cloud_diff)
+    AMIP_RSUTCS = cmip5.get_ensemble(direc,variable,func=rsut_diff)
     AMIP_RSUTCS.id = "rsutcs"
     f = cdms.open("AMIP_RSUTCS.nc","w")
     f.write(AMIP_RSUTCS)
