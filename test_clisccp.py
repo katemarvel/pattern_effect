@@ -82,7 +82,15 @@ def ensemble_AMIP_LCC():
     f.write(AMIP_LCC)
     f.close()
     return AMIP_LCC
-
+def ensemble_HISTORICAL_LCC():
+    direc = "/work/cmip5/historical/atm/mo/clisccp/"
+    variable="clisccp"
+    HISTORICAL_LCC = cmip5.get_ensemble(direc,variable,func=low_cloud_diff)
+    HISTORICAL_LCC.id = "lcc"
+    f = cdms.open("HISTORICAL_LCC.nc","w")
+    f.write(HISTORICAL_LCC)
+    f.close()
+    return HISTORICAL_LCC
 
 def rsut_diff(X):
     
