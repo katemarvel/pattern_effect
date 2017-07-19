@@ -146,8 +146,8 @@ def historical_SWCRE(HISTORICAL_RSUT,HISTORICAL_RSUTCS):
       HISTORICAL_SWCRE = MV.zeros((nmod,)+HISTORICAL_RSUTCS.shape[1:])
       counter=0
       for model in common_models:
-            i = allsmod_hist.index(model)
-            j = csmod_hist.index(model)
+            i = allsmod_hist.tolist().index(model)
+            j = csmod_hist.tolist().index(model)
             HISTORICAL_SWCRE[counter]=HISTORICAL_RSUT[i] - HISTORICAL_RSUTCS[j]
             counter+=1
       HISTORICAL_SWCRE.setAxis(1,HISTORICAL_RSUT.getLatitude())
