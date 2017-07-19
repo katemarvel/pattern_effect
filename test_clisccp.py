@@ -136,7 +136,30 @@ def ensemble_HISTORICAL_RSUTCS():
     f.close()
     return HISTORICAL_RSUTCS
 
-HISTORICAL_RSUT = ensemble_HISTORICAL_RSUT()
-HISTORICAL_RSUTCS = ensemble_HISTORICAL_RSUTCS()
-
+#HISTORICAL_RSUT = ensemble_HISTORICAL_RSUT()
+#HISTORICAL_RSUTCS = ensemble_HISTORICAL_RSUTCS()
+def historical_SWCRE(HISTORICAL_RSUT,HISTORICAL_RSUTCS):
+      allsmod_hist=np.array([x.split("/")[-1].split("rsut")[0] for x in eval(HISTORICAL_RSUT.getAxis(0).models)])
+      csmod_hist=np.array([x.split("/")[-1].split("rsutcs")[0] for x in eval(HISTORICAL_RSUTCS.getAxis(0).models)])
+      common_models = np.intersect1d(allsmod_hist,csmod_hist)
+      nmod=len(common_models)
+      HISTORICAL_SWCRE = MV.zeros((nmod,)+HISTORICAL_RSUTCS.shape[1:])
+      counter=0
+      for model in common_models:
+            i = allsmod_hist.index(model)
+            j = csmod_hist.index(model)
+            HISTORICAL_SWCRE[counter]=HISTORICAL_RSUT[i] - HISTORICAL_RSUTCS[j]
+            counter+=1
+    HISTORICAL_SWCRE.setAxis(1,HISTORICAL_RSUT.getLatitude())
+    HISTORICAL_SWCRE.setAxis(2,HISTORICAL_RSUT.getLongitude())
+    modax = cmip5.make_model_axis(np.array(common_models).tolist())
+    HISTORICAL_SWCRE.setAxis(0,modax)
+    HISTORICAL_SWCRE.id="SWCRE"
+    f = cdms.open("HISTORICAL_SWCRE.nc","w")
+    f.write(HISTORICAL_SWCRE)
+    f.close()
+    return HISTORICAL_SWCRE
+      
+      
+      
 
