@@ -116,7 +116,27 @@ def ensemble_AMIP_RSUTCS():
     f.close()
     return AMIP_RSUTCS
 
-AMIP_RSUT = ensemble_AMIP_RSUT()
-AMIP_RSUTCS = ensemble_AMIP_RSUTCS()
+def ensemble_HISTORICAL_RSUT():
+    direc = "/work/cmip5/historical/atm/mo/rsut/"
+    variable="rsut"
+    HISTORICAL_RSUT = cmip5.get_ensemble(direc,variable,func=rsut_diff)
+    HISTORICAL_RSUT.id = "rsut"
+    f = cdms.open("HISTORICAL_RSUT.nc","w")
+    f.write(HISTORICAL_RSUT)
+    f.close()
+    return HISTORICAL_RSUT
+
+def ensemble_HISTORICAL_RSUTCS():
+    direc = "/work/cmip5/historical/atm/mo/rsutcs/"
+    variable="rsutcs"
+    HISTORICAL_RSUTCS = cmip5.get_ensemble(direc,variable,func=rsut_diff)
+    HISTORICAL_RSUTCS.id = "rsutcs"
+    f = cdms.open("HISTORICAL_RSUTCS.nc","w")
+    f.write(HISTORICAL_RSUTCS)
+    f.close()
+    return HISTORICAL_RSUTCS
+
+HISTORICAL_RSUT = ensemble_HISTORICAL_RSUT()
+HISTORICAL_RSUTCS = ensemble_HISTORICAL_RSUTCS()
 
 
