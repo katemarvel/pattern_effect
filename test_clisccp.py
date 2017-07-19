@@ -150,15 +150,15 @@ def historical_SWCRE(HISTORICAL_RSUT,HISTORICAL_RSUTCS):
             j = csmod_hist.index(model)
             HISTORICAL_SWCRE[counter]=HISTORICAL_RSUT[i] - HISTORICAL_RSUTCS[j]
             counter+=1
-    HISTORICAL_SWCRE.setAxis(1,HISTORICAL_RSUT.getLatitude())
-    HISTORICAL_SWCRE.setAxis(2,HISTORICAL_RSUT.getLongitude())
-    modax = cmip5.make_model_axis(np.array(common_models).tolist())
-    HISTORICAL_SWCRE.setAxis(0,modax)
-    HISTORICAL_SWCRE.id="SWCRE"
-    f = cdms.open("HISTORICAL_SWCRE.nc","w")
-    f.write(HISTORICAL_SWCRE)
-    f.close()
-    return HISTORICAL_SWCRE
+      HISTORICAL_SWCRE.setAxis(1,HISTORICAL_RSUT.getLatitude())
+      HISTORICAL_SWCRE.setAxis(2,HISTORICAL_RSUT.getLongitude())
+      modax = cmip5.make_model_axis(np.array(common_models).tolist())
+      HISTORICAL_SWCRE.setAxis(0,modax)
+      HISTORICAL_SWCRE.id="SWCRE"
+      f = cdms.open("HISTORICAL_SWCRE.nc","w")
+      f.write(HISTORICAL_SWCRE)
+      f.close()
+      return HISTORICAL_SWCRE
       
       
       
