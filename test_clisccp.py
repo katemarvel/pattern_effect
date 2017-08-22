@@ -34,7 +34,7 @@ if crunchy:
     sys.path.append("/work/marvel1/python-utils")
 else:
     sys.path.append("~/Google Drive/python-utils")
-from Plotting import *
+import Plotting
 import CMIP5_tools as cmip5
 
 
@@ -66,8 +66,10 @@ def low_cloud_diff(clisccp):
     low = MV.sum(clisccp_all_od(level=(1000*100,440.*100)),axis=plev_ax)(time=('1979-1-1','2005-12-31'))
     cdutil.setTimeBoundsMonthly(low)
     the_diff= last_ten_minus_first_ten(cdutil.YEAR(low))
-
-    fobs = cdms.open("/work/marvel1/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
+    if crunchy:
+        fobs = cdms.open("/work/marvel1/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
+    else:
+        fobs = cdms.open("/Users/kmarvel/Google Drive/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
     the_grid = fobs["clt"].getGrid()
     the_diff_regrid = the_diff.regrid(the_grid,regridTool='regrid2')
     fobs.close()
@@ -169,5 +171,305 @@ def historical_SWCRE(HISTORICAL_RSUT,HISTORICAL_RSUTCS):
       return HISTORICAL_SWCRE
       
       
-      
+#8/6: trying to figure out why the code in cmip5_ECS and averaging over the map yield different results
+import cmip5_ECS as c
+def compare_timeseries_and_map():
+    sw_time = c.SWCRE("amip")
+    cdutil.setTimeBoundsMonthly(sw_time)
+    from_timeseries = last_ten_minus_first_ten(cdutil.YEAR(sw_time))
+    f = cdms.open("MAPS/AMIP_SWCRE.nc")
+    sw_map = f("SWCRE")
+    from_map = cdutil.averager(sw_map,axis='xy')
+    timeseries_models = [x.split(".")[1]+"."+x.split(".")[3] for x in eval(sw_time.getAxis(0).models)]
+    map_models = [x.split(".")[1]+"."+x.split(".")[3] for x in eval(sw_map.getAxis(0).models)]
+    models_in_common = np.intersect1d(map_models,timeseries_models)
+    L = len(models_in_common)
+    MAP=MV.zeros(L)
+    TS = MV.zeros(L)
+    counter=0
+    for model in models_in_common:
+        time_i = timeseries_models.index(model)
+        TS[counter]=from_timeseries[time_i]
+        map_i = map_models.index(model)
+        MAP[counter]=from_map[map_i]
+        counter+=1
+    modax = make_model_axis(["cmip5."+x for x in models_in_common.tolist()])
+    MAP.setAxis(0,modax)
+    MAP.id="swcre_map"
+    TS.setAxis(0,modax)
+    TS.id = "swcre_timeseries"
+    return TS,MAP
 
+
+def add_giss_to_amip_lcc():
+  
+    f = cdms.open("MAPS/AMIP_LCC.nc")
+    amip_lcc = f("lcc")
+    f.close()
+    nmodels = amip_lcc.shape[0]
+    amip_new = MV.zeros((nmodels+2,)+amip_lcc.shape[1:])
+    amip_new[2:]=amip_lcc
+    models = eval(amip_lcc.getAxis(0).models)
+
+    giss3model = '/Users/kmarvel/Google Drive/PATTERN_EFFECT/cmip5.GISS-E2-R.amip.r1i1p3.mo.atm.cfMon.clisccp.ver-1.latestX.nc'
+    giss1model = '/Users/kmarvel/Google Drive/PATTERN_EFFECT/cmip5.GISS-E2-R.amip.r1i1p1.mo.atm.cfMon.clisccp.ver-1.latestX.nc'
+    newmodels = [giss1model,giss3model]+models
+    
+    fg3 = cdms.open(giss3model)
+    clisccp3 = fg3("clisccp")
+    gissp3lcc=low_cloud_diff(clisccp3)
+    fg3.close()
+
+    fg1 = cdms.open(giss1model)
+    clisccp1 = fg1("clisccp")
+    gissp1lcc=low_cloud_diff(clisccp1)
+    fg1.close()
+
+    amip_new[0]=gissp1lcc
+    amip_new[1]=gissp3lcc
+
+    modax = cmip5.make_model_axis(newmodels)
+
+    amip_new.setAxis(0,modax)
+    for i in range(len(amip_lcc.shape))[1:]:
+        amip_new.setAxis(i,amip_lcc.getAxis(i))
+    amip_new.id='lcc'
+    return amip_new
+
+    
+
+      
+    
+
+#8/7: compare low cloud cover and apparent ECS
+#in Tropics, SO, etc.
+def AMIP_LCC():
+    f = cdms.open("MAPS/AMIP_LCC.nc")
+    amip_lcc = f("lcc") 
+    amip_estimator = c.ECS("amip")
+    amip_estimator.estimate_ECS(typ="annual regression") #Still need to explore why this is systematically lower than decadal
+    amip_lcc_ensav = cmip5.ensemble2multimodel(amip_lcc)
+    amip_ecs_ensav = cmip5.ensemble2multimodel(amip_estimator.ECS)
+    amip_ecs_models = eval(amip_ecs_ensav.getAxis(0).models)
+    amip_lcc_models = eval(amip_lcc_ensav.getAxis(0).models)
+    models_in_common = np.intersect1d(amip_ecs_models,amip_lcc_models)
+    TROPICAL_LCC = cdutil.averager(amip_lcc_ensav(latitude=(-10,10)),axis='xy')
+    SO_LCC = cdutil.averager(amip_lcc_ensav(latitude=(-90,-50)),axis='xy')
+    TOTAL_LCC = cdutil.averager(amip_lcc_ensav,axis='xy')
+    TROPICS={}
+    SO={}
+    TOTAL = {}
+    for model in models_in_common:
+        ecs_i = amip_ecs_models.index(model)
+        lcc_i = amip_lcc_models.index(model)
+        TROPICS[model]=[amip_ecs_ensav[ecs_i],TROPICAL_LCC[lcc_i]]
+
+        SO[model]=[amip_ecs_ensav[ecs_i],SO_LCC[lcc_i]]
+        TOTAL[model]=[amip_ecs_ensav[ecs_i],TOTAL_LCC[lcc_i]]
+
+def HISTORICAL_LCC():
+    f = cdms.open("MAPS/HISTORICAL_LCC.nc")
+    historical_lcc = f("lcc") 
+    historical_estimator = c.ECS("historical")
+    historical_estimator.estimate_ECS(typ="annual regression") #Still need to explore why this is systematically lower than decadal
+    historical_lcc_ensav = cmip5.ensemble2multimodel(historical_lcc)
+    historical_ecs_ensav = cmip5.ensemble2multimodel(historical_estimator.ECS)
+    historical_ecs_models = eval(historical_ecs_ensav.getAxis(0).models)
+    historical_lcc_models = eval(historical_lcc_ensav.getAxis(0).models)
+    models_in_common = np.intersect1d(historical_ecs_models,historical_lcc_models)
+    historical_TROPICAL_LCC = cdutil.averager(historical_lcc_ensav(latitude=(-10,10)),axis='xy')
+    historical_SO_LCC = cdutil.averager(historical_lcc_ensav(latitude=(-90,-50)),axis='xy')
+    historical_TROPICS={}
+    historical_SO={}
+    for model in models_in_common:
+        ecs_i = historical_ecs_models.index(model)
+        lcc_i = historical_lcc_models.index(model)
+        historical_TROPICS[model]=[historical_ecs_ensav[ecs_i],historical_TROPICAL_LCC[lcc_i]]
+
+        historical_SO[model]=[historical_ecs_ensav[ecs_i],historical_SO_LCC[lcc_i]]
+
+        
+def models_in_common(X,Y):
+    """ X and Y should be ensemble averages """
+    Xmodels = eval(X.getAxis(0).models)
+    Ymodels = eval(Y.getAxis(0).models)
+    models_in_common = np.intersect1d(Xmodels,Ymodels)
+    L = len(models_in_common)
+    Xnew = MV.zeros((L,)+X.shape[1:])
+    Ynew = MV.zeros((L,)+Y.shape[1:])
+    counter = 0
+    for model in models_in_common:
+        xi = Xmodels.index(model)
+        Xnew[counter]=X[xi]
+
+        yi = Ymodels.index(model)
+        Ynew[counter]=Y[yi]
+        counter+=1
+    newmodax = cmip5.make_model_axis(models_in_common.tolist())
+    Xnew.setAxis(0,newmodax)
+    Xnew.id = X.id
+    for i in range(len(X.shape))[1:]:
+        Xnew.setAxis(i,X.getAxis(i))
+    Ynew.setAxis(0,newmodax)
+    Ynew.id = Y.id
+    for i in range(len(Y.shape))[1:]:
+        Ynew.setAxis(i,Y.getAxis(i))
+    return Xnew,Ynew
+    
+
+def tropical_marine_lcc_klein(X):
+    #Stratus regions
+
+    Peru = cdutil.region.domain(latitude=(-20,-10),longitude=(-90,-80))
+    Namibia = cdutil.region.domain(latitude=(-20,-10),longitude=(0,10))
+    California = cdutil.region.domain(latitude=(20,30),longitude=(-130,-120))
+    Australia = cdutil.region.domain(latitude=(-35,-25),longitude=(95,105))
+    Canaries = cdutil.region.domain(latitude=(15,25),longitude=(-35,-25))
+    return cdutil.averager(X(Peru),axis='xy')+cdutil.averager(X(Namibia),axis='xy')+cdutil.averager(X(California),axis='xy')+cdutil.averager(X(Australia),axis='xy')+cdutil.averager(X(Canaries),axis='xy')
+
+
+def tropical_marine_lcc_qu(X):
+    #Stratus regions as defined by Qu et al 2015
+
+    Peru = cdutil.region.domain(latitude=(-30,-10),longitude=(-110,-70))
+    Namibia = cdutil.region.domain(latitude=(-30,-10),longitude=(-25,15))
+    California = cdutil.region.domain(latitude=(15,35),longitude=(-155,-115))
+    Australia = cdutil.region.domain(latitude=(-35,-25),longitude=(75,115))
+    Canaries = cdutil.region.domain(latitude=(10,30),longitude=(-50,-10))
+    
+    return cdutil.averager(X(Peru),axis='xy')+cdutil.averager(X(Namibia),axis='xy')+cdutil.averager(X(California),axis='xy')+cdutil.averager(X(Australia),axis='xy')+cdutil.averager(X(Canaries),axis='xy')
+
+
+def plot_tropical_lcc(X,projection='moll'):
+    if X.id == "SWCRE":
+        v=8
+    else:
+        v=2
+    Peru = cdutil.region.domain(latitude=(-30,-10),longitude=(-110,-70))
+    Namibia = cdutil.region.domain(latitude=(-30,-10),longitude=(-25,15))
+    California = cdutil.region.domain(latitude=(15,35),longitude=(-155,-115))
+    Australia = cdutil.region.domain(latitude=(-35,-25),longitude=(75,115))
+    Canaries = cdutil.region.domain(latitude=(10,30),longitude=(-50,-10))
+    lon = X.getLongitude().getBounds()[:,0]
+    lat = X.getLatitude().getBounds()[:,0]
+    
+    m = Basemap(lon_0=0,projection=projection)
+    #x,y=m(*np.meshgrid(lon,lat))
+   # m.pcolormesh(x,y,X,vmin=2,vmax=2,alpha=.3)
+    for region in [Peru,Namibia,California,Australia,Canaries]:
+        Xr = X(region)
+        lon = Xr.getLongitude().getBounds()[:,0]
+        lat = Xr.getLatitude().getBounds()[:,0]
+        x,y=m(*np.meshgrid(lon,lat))
+    #if vmin is None:
+        m.pcolormesh(x,y,Xr,vmin=-v,vmax=v)
+    m.drawcoastlines()
+
+
+def match_ensemble_members(X,Y):
+    xmodels = cmip5.models(X)
+    ymodels = cmip5.models(Y)
+    xrips = ["cmip5."+thing.split(".")[1]+"."+thing.split(".")[2]+"."+thing.split(".")[3]+"." for thing in xmodels]
+    yrips = ["cmip5."+thing.split(".")[1]+"."+thing.split(".")[2]+"."+thing.split(".")[3]+"." for thing in ymodels]
+    in_common = np.intersect1d(xrips,yrips)
+    L = len(in_common)
+    Xt = MV.zeros((L,)+X.shape[1:])
+    Yt = MV.zeros((L,)+Y.shape[1:])
+    for i in range(L):
+        modrip=in_common[i]
+        ix = xrips.index(modrip)
+        Xt[i] = X[ix]
+        iy = yrips.index(modrip)
+        Yt[i]=Y[iy]
+    modax = cmip5.make_model_axis(in_common.tolist())
+    Xt.id = X.id
+    Xt.setAxis(0,modax)
+    for axi in range(len(X.shape))[1:]:
+        Xt.setAxis(axi,X.getAxis(axi))
+    Yt.id = Y.id
+    Yt.setAxis(0,modax)
+    for axi in range(len(Y.shape))[1:]:
+        Yt.setAxis(axi,Y.getAxis(axi))
+    return Xt,Yt
+        
+def correlate_swcre_and_lcc(experiment):
+    fl = cdms.open("MAPS/"+string.upper(experiment)+"_LCC.nc")
+    lcc = fl("lcc")
+    fl.close()
+    fs = cdms.open("MAPS/"+string.upper(experiment)+"_SWCRE.nc")
+    swcre = fs("SWCRE")
+    fs.close()
+
+    lcc_trop = tropical_marine_lcc_qu(lcc)
+    swcre_trop = tropical_marine_lcc_qu(swcre)
+
+    x,y= match_ensemble_members(lcc_trop,swcre_trop)
+    Plotting.scatterplot_cmip(x,-y)
+    plt.legend(ncol=3,fontsize=10,numpoints=1,loc=0)
+    print genutil.statistics.correlation(x,-y)
+    return x,-y
+    
+    
+def compare_ECS_and_tropcloud(experiment,thing="LCC",ensemble_average=True):
+    estimator = c.ECS(experiment)
+    f = cdms.open("MAPS/"+string.upper(experiment)+"_"+thing+".nc")
+    if thing is "LCC":
+        lcc = f("lcc")
+    else:
+        lcc = f("SWCRE")
+    stratocumulus = tropical_marine_lcc_qu(lcc)
+    estimator.estimate_ECS(typ="annual regression")
+    ecs = estimator.ECS
+    if ensemble_average:
+        ecs_ensav = cmip5.ensemble2multimodel(ecs)
+        stratocum_ensav = cmip5.ensemble2multimodel(stratocumulus)
+        X,Y = models_in_common(ecs_ensav,stratocum_ensav)
+    else:
+        X,Y = match_ensemble_members(ecs,stratocumulus)
+    return X,Y
+    
+def scatterplot_stuff(X,Y,cmap=cm.viridis,unaveraged=False):
+    markers = np.tile(["o","s","D","*","p","v"],100)
+    if unaveraged:
+        ed = cmip5.ensemble_dictionary(X)
+        models = sorted(ed.keys())
+        for i in range(len(models)):
+            c=cmap(float(i)/float(len(models)))
+            plt.plot(X.asma()[ed[models[i]]],Y.asma()[ed[models[i]]], markers[i],markersize=10,color=c,label=models[i])
+    else:
+        models = cmip5.models(X)
+        for i in range(len(models)):
+            c=cmap(float(i)/float(len(models)))
+            plt.plot([X[i]],[Y[i]], markers[i],markersize=10,color=c,label=models[i])
+
+class Sensitivity():
+    def __init__(self,ensemble_average = True):
+        estimator = c.ECS("amip")
+        estimator.estimate_ECS(typ="annual regression")
+        if ensemble_average:
+            self.amip = cmip5.ensemble2multimodel(estimator.ECS)
+        else:
+            self.amip = estimator.ECS
+
+        hestimator = c.ECS("historical")
+        hestimator.estimate_ECS(typ="annual regression")
+        if ensemble_average:
+            self.historical = cmip5.ensemble2multimodel(hestimator.ECS)
+        else:
+            self.historical = hestimator.ECS
+
+        if ensemble_average:
+            self.amip,self.historical = models_in_common(self.amip,self.historical)
+        if not ensemble_average:
+            models = cmip5.models(cmip5.ensemble2multimodel(hestimator.ECS))
+        else:
+            models = cmip5.models(self.amip)
+
+        equil = np.array([cmip5.clim_sens(model) for model in models])
+        equil = MV.masked_where(np.isnan(equil),equil)
+        equil.setAxis(0,self.historical.getAxis(0))
+        self.equil = equil
+
+
+        
+    
