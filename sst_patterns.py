@@ -129,7 +129,7 @@ if __name__ == "__main__":
     fobs.close()
 
 
-    #TOA = {"rsdt":"TOA Incident Shortwave Radiation",\
+    TOA = {"rsdt":"TOA Incident Shortwave Radiation",\
             "rsut": "TOA Outgoing Shortwave Radiation",\
             "rlut": "TOA Outgoing Longwave Radiation"}
 
