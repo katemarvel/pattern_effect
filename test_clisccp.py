@@ -74,7 +74,56 @@ def low_cloud_diff(clisccp):
     the_diff_regrid = the_diff.regrid(the_grid,regridTool='regrid2')
     fobs.close()
     return the_diff_regrid
-    
+
+
+def low_cloud_diff(clisccp):
+    #f=cdms.open(fname)
+    #clisccp = f("clisccp")
+    axes = clisccp.getAxisIds()
+    tau_ax = axes.index("tau")
+    clisccp_all_od = MV.sum(clisccp,axis=tau_ax)
+    plev_ax = clisccp_all_od.getAxisIds().index("plev")
+    low = MV.sum(clisccp_all_od(level=(1000*100,440.*100)),axis=plev_ax)(time=('1979-1-1','2005-12-31'))
+    cdutil.setTimeBoundsMonthly(low)
+    the_diff= last_ten_minus_first_ten(cdutil.YEAR(low))
+    if crunchy:
+        fobs = cdms.open("/work/marvel1/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
+    else:
+        fobs = cdms.open("/Users/kmarvel/Google Drive/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
+    the_grid = fobs["clt"].getGrid()
+    the_diff_regrid = the_diff.regrid(the_grid,regridTool='regrid2')
+    fobs.close()
+    return the_diff_regrid
+
+def low_cloud_abrupt_diff(clisccp):
+    #f=cdms.open(fname)
+    #clisccp = f("clisccp")
+    axes = clisccp.getAxisIds()
+    tau_ax = axes.index("tau")
+    clisccp_all_od = MV.sum(clisccp,axis=tau_ax)
+    plev_ax = clisccp_all_od.getAxisIds().index("plev")
+    low = MV.sum(clisccp_all_od(level=(1000*100,440.*100)),axis=plev_ax)#(time=('1979-1-1','2005-12-31'))
+    cdutil.setTimeBoundsMonthly(low)
+    the_diff= MV.average(low[130*12:140*12],axis=0)-MV.average(low[0*12:10*12],axis=0)
+    if crunchy:
+        fobs = cdms.open("/work/marvel1/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
+    else:
+        fobs = cdms.open("/Users/kmarvel/Google Drive/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
+    the_grid = fobs["clt"].getGrid()
+    the_diff_regrid = the_diff.regrid(the_grid,regridTool='regrid2')
+    fobs.close()
+    return the_diff_regrid
+
+def ensemble_ABRUPT_LCC():
+    direc = "/work/cmip5/abrupt4xCO2/atm/mo/clisccp/"
+    variable="clisccp"
+    ABRUPT_LCC = cmip5.get_ensemble(direc,variable,func=low_cloud_abrupt_diff)
+    ABRUPT_LCC.id = "lcc"
+    f = cdms.open("ABRUPT_LCC.nc","w")
+    f.write(ABRUPT_LCC)
+    f.close()
+    return ABRUPT_LCC
+
 def ensemble_AMIP_LCC():
     direc = "/work/cmip5/amip/atm/mo/clisccp/"
     variable="clisccp"
@@ -466,10 +515,102 @@ class Sensitivity():
             models = cmip5.models(self.amip)
 
         equil = np.array([cmip5.clim_sens(model) for model in models])
+
         equil = MV.masked_where(np.isnan(equil),equil)
         equil.setAxis(0,self.historical.getAxis(0))
         self.equil = equil
 
+
+def mask_sea_ice(X):
+    fi = cdms.open("PATTERN_MAPS/sea_ice_for_amip.nc")
+    SI = fi("sea_ice_percent")
+    fi.close()
+    SIr = SI.regrid(X.getGrid(),regridTool='regrid2')
+    mask = SIr != 0
+    if len(X.shape)==2:
+        return MV.masked_where(mask,X)
+    elif len(X.shape)==3:
+        L = X.shape[0]
+        bigmask = np.repeat(mask.asma()[np.newaxis,:,:],L,axis=0)
+        
+        return MV.masked_where(bigmask,X)
+    else:
+        print "input array must have dimensions (time, lat, lon)"
+        raise TypeError
+def mask_land(X):
+    fl = cdms.open("PATTERN_MAPS/obs_climatology.nc")
+    obs = fl("sst")
+    mask = obs.mask
+    fl.close()
+    if len(X.shape)==2:
+        return MV.masked_where(mask,X)
+    elif len(X.shape)==3:
+        L = X.shape[0]
+        bigmask = np.repeat(mask[np.newaxis,:,:],L,axis=0)
+        
+        return MV.masked_where(bigmask,X)
+    else:
+        print "input array must have dimensions (time, lat, lon)"
+        raise TypeError   
+
+def compare_ts_patterns(experiment="historical",func="covariance",mask_all=True):
+   
+
+    variable = "ts"#REPLACE WITH TS!!!!!!!!!
+    f = cdms.open("PATTERN_MAPS/"+experiment+"."+variable+".nc") #REPLACE WITH TS!!!!!!!!!
+    tspatt = f(variable)
+    f.close()
+
+    
+    fa  = cdms.open("PATTERN_MAPS/abrupt4xCO2.ts.nc")
+    abrupt = fa("ts")
+    fa.close()
+
+    if mask_all:
+        abrupt = mask_land(mask_sea_ice(abrupt))
+        tspatt = mask_land(mask_sea_ice(tspatt))
+
+    experiment_models = cmip5.models(tspatt)
+    
+    abrupt_models=cmip5.models(abrupt)
+    new_abrupt = []
+    for model in abrupt_models:
+        trunc = model.split(".")[1]
+        if trunc.find("GISS")<0:
+            new_abrupt+=[trunc]
+        else:
+            rip = model.split(".")[3]
+            phys_version = rip.split("p")[1]
+            new_abrupt += [trunc+"*p"+phys_version]
+  
+    nmod = len(experiment_models)
+
+    C = MV.zeros(nmod)+1.e20
+    bad = []
+    for i in range(nmod):
+        model = experiment_models[i]
+        trunc = model.split(".")[1]
+        print trunc
+        if trunc.find("GISS")<0:
+            trunc=trunc
+        else:
+            rip = model.split(".")[3]
+            phys_version = rip.split("p")[1]
+            trunc = trunc+"*p"+phys_version
+        try:
+            corresponding_i = new_abrupt.index(trunc)
+           
+            C[i] = getattr(genutil.statistics,func)(tspatt[i],abrupt[corresponding_i],axis='xy')
+           
+        except:
+           
+            bad += [trunc]
+    C = MV.masked_where(C>1.e10,C)
+    C.setAxis(0,tspatt.getAxis(0))
+    return C, bad
+            
+
+    
 
         
     

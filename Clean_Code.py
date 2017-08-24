@@ -2,9 +2,11 @@ import cdms2 as cdms
 import genutil,cdutil
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.stats as stats
 #Modules I wrote
 import CMIP5_tools as cmip5
 import Plotting
+
 
 ### TO DO 8/18:
 
@@ -195,6 +197,9 @@ def estimate_ECS(typ,temperature_variable="ts"):
     """
     Estimate the ECS over the AMIP time period (1979-2005 inclusive) as the regression coefficient of annual means.
     """
+    if typ == "equil":
+        return cmip5.all_clim_sens()
+    
     T = cdutil.YEAR(TS(typ,variable=temperature_variable)) #Annual mean surface temperature
     QTOA = cdutil.YEAR(Q(typ)) #Annual mean TOA radiative imbalance
     F = get_forcing(forcing_from="AR5")(time=('1979-1-1','2005-12-31')) #Assume AR5 forcing
@@ -223,8 +228,83 @@ def estimate_ECS(typ,temperature_variable="ts"):
     return ECS
 
 
+####### FIGURE CODE #########
 
-def ECS_inferred_figure(cmap = cm.Dark2):
+def Figure1(cmap=cm.Dark2):
+    """
+    Figure 1 of proposed paper
+    """
+    
+    historical = estimate_ECS("historical")
+    amip = estimate_ECS("amip")
+    equil = estimate_ECS("equil")
+    #Ensemble averages
+    amip_ensav = cmip5.ensemble2multimodel(amip)
+    historical_ensav = cmip5.ensemble2multimodel(historical)
+    #Make sure we're looking at the same set of models
+    amip2,hist2=models_in_common(amip_ensav,historical_ensav)
+    amip_comp,eq_comp = models_in_common(amip2,equil)
+    historical_comp,eq_comp_h = models_in_common(hist2,equil)
+    
+    #First panel: histograms of inferred ECS
+    plt.subplot(221)
+    x_fit = np.linspace(0,7)
+    plt.hist(historical.compressed(),20,color=cmap(.3),ec=cmap(.3),alpha=.5,normed=True,label="Historical")
+    scatter,loc,mean = stats.lognorm.fit(historical.compressed())
+    pdf_fitted = stats.lognorm.pdf(x_fit,scatter,loc,mean)
+    plt.plot(x_fit,pdf_fitted,color=cmap(.3),lw=3)
+        
+    plt.hist(amip.compressed(),20,color=cmap(.6),ec=cmap(0.6),alpha=.5,normed=True,label="AMIP")
+    scatter,loc,mean = stats.lognorm.fit(amip.compressed())
+    pdf_fitted = stats.lognorm.pdf(x_fit,scatter,loc,mean)
+    plt.plot(x_fit,pdf_fitted,color=cmap(.6),lw=3)
+        
+    plt.hist(equil,color=cmap(.9),ec=cmap(.9),alpha=.5,normed=True,label="Forster et al.")
+    scatter,loc,mean = stats.lognorm.fit(cmip5.all_clim_sens())
+    pdf_fitted = stats.lognorm.pdf(x_fit,scatter,loc,mean)
+    plt.plot(x_fit,pdf_fitted,color=cmap(.9),lw=3)
+    plt.xlabel(r'Estimated ECS ($^{\circ}$C)')
+    plt.ylabel("PDF")
+    plt.legend(loc=0)
+    plt.title("(a): Inferred ECS")
+
+    #Second panel: correlate historical and amip
+    plt.subplot(222)
+    Plotting.scatterplot_cmip(amip_comp,historical_comp)
+    plt.xlabel(r"Ensemble mean ECS inferred from AMIP ($^{\circ}$)")
+    plt.ylabel(r"Ensemble mean ECS inferred from historical ($^{\circ}$)")
+    x = np.linspace(1,4.5)
+    plt.plot(x,x,"k--")
+    plt.legend(loc=0,numpoints=1,ncol=2,fontsize=10)
+    corrcoef=str(np.round(float(genutil.statistics.correlation(amip_comp,historical_comp)),2))
+    plt.title("(b) AMIP and historical: R = "+corrcoef)
+
+    #Third panel: correlate historical and equilibrium
+    plt.subplot(223)
+    Plotting.scatterplot_cmip(historical_comp,eq_comp)
+    plt.ylabel(r"Equilibrium ECS ($^{\circ}$)")
+    plt.xlabel(r"Ensemble mean ECS inferred from historical ($^{\circ}$)")
+    x = np.linspace(1,4.5)
+    plt.plot(x,x,"k--")
+    plt.legend(loc=0,numpoints=1,ncol=2,fontsize=10)
+    corrcoef=str(np.round(float(genutil.statistics.correlation(eq_comp,historical_comp)),2))
+    plt.title("(c) Historical and equilibrium: R = "+corrcoef)
+
+    
+    #Fourth panel: correlate amip and equilibrium
+    plt.subplot(224)
+    Plotting.scatterplot_cmip(amip_comp,eq_comp)
+    plt.ylabel(r"Equilibrium ECS ($^{\circ}$)")
+    plt.xlabel(r"Ensemble mean ECS inferred from AMIP ($^{\circ}$)")
+    x = np.linspace(1,4.5)
+    plt.plot(x,x,"k--")
+    plt.legend(loc=0,numpoints=1,ncol=2,fontsize=10)
+    corrcoef=str(np.round(float(genutil.statistics.correlation(eq_comp,amip_comp)),2))
+    plt.title("(d) AMIP and equilibrium: R = "+corrcoef)
+
+
+    
+def Figure2(cmap = cm.Dark2):
     """
     Figure 2 of proposed paper.  Shows the inferred ensemble spread for each CMIP5 model in historical vs amip
     """
@@ -272,6 +352,7 @@ def tropical_marine_lcc(X):
     Average the variable X over tropical marine stratocumulus regions
     """
     #Stratus regions as defined by Qu et al 2015
+ 
     Peru = cdutil.region.domain(latitude=(-30,-10),longitude=(-110,-70))
     Namibia = cdutil.region.domain(latitude=(-30,-10),longitude=(-25,15))
     California = cdutil.region.domain(latitude=(15,35),longitude=(-155,-115))
@@ -315,7 +396,22 @@ def compare_ECS_and_tropicalcloud(experiment,compare_to="LCC",ensemble_average=T
     return X,Y
 
 
-####TEMPORARY EXPERIMENTAL CODE #####    
+
+
+####TEMPORARY EXPERIMENTAL CODE #####
+
+
+def plot_single_model(X,Y,model):
+    Xdict = cmip5.ensemble_dictionary(X)
+    Ydict = cmip5.ensemble_dictionary(Y)
+    xi = Xdict[model]
+    yi = Ydict[model]
+    Xplot = X.asma()[xi]
+    Yplot = Y.asma()[yi]
+    m=Plotting.model_dictionary()[model]["marker"]
+    c=Plotting.model_dictionary()[model]["color"]
+    plt.plot(Xplot,Yplot,m,color=c)
+
     
 def southern_ocean_lcc(X):
     return cdutil.averager(X(latitude=(-90,-50)),axis='xy')
@@ -364,3 +460,4 @@ def scatterplot_stuff(X,Y,cmap=cm.viridis,ensemble_average=True):
         for i in range(len(models)):
             c=cmap(float(i)/float(len(models)))
             plt.plot([X[i]],[Y[i]], markers[i],markersize=10,color=c,label=models[i])
+
