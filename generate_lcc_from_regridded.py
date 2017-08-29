@@ -64,6 +64,8 @@ def abrupt_cloud_cover():
     MID = MV.zeros((L,140)+the_grid.shape)+1.e20
     HIGH = MV.zeros((L,140)+the_grid.shape)+1.e20
     fobs.close()
+    i=0
+    
     for i in range(L):
         fname = afiles[i]
         try:
@@ -96,5 +98,64 @@ def abrupt_cloud_cover():
     fw.write(HIGH)
     fw.history="Generated using function abrupt_cloud_cover in generate_lcc_from_regridded.py by Kate Marvel 8/27/17"
     fw.close()
+
+def make_xmls(rn):
+    path =  "/kate/cl_regrid_isccp/"+rn+"/"
+    prefixes = np.unique([x.split("latestX")[0] for x in glob.glob(path+"*")])
     
+    for prefix in prefixes:
+        
+        xml = prefix+"latestX.xml"
+        
+        cmd = "cdscan -x "+xml+" "+prefix+"*"
+        os.system(cmd)
+    
+def historical_cloud_cover(rn):
+    path =  "/kate/cl_regrid_isccp/"+rn+"/"
+    files = glob.glob(path+"*xml")
+    afiles=sorted(cmip5.only_most_recent(files))
+    if crunchy:
+        fobs = cdms.open("/work/marvel1/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
+    else:
+        fobs = cdms.open("/Users/kmarvel/Google Drive/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
+    the_grid = fobs["clt"].getGrid()
+    L = len(afiles)
+    LOW = MV.zeros((L,27)+the_grid.shape)+1.e20
+    MID = MV.zeros((L,127)+the_grid.shape)+1.e20
+    HIGH = MV.zeros((L,27)+the_grid.shape)+1.e20
+    fobs.close()
+    
+    
+    for i in range(L):
+        fname = afiles[i]
+        try:
+            f = cdms.open(fname)
+            clisccp =  f("pgrid_cl")(time='1979-1-1','2005-12-31')
+            low,mid,high = bin_cloud_cover(clisccp)
+            LOW[i] = low
+            MID[i] = mid
+            HIGH[i] = high
+            f.close()
+        except:
+            continue
+    axesList = [cmip5.make_model_axis(afiles),low.getTime(),low.getLatitude(),low.getLongitude()]
+    
+    LOW = MV.masked_where(LOW>1.e10,LOW)
+    LOW.id = "low_cloud"
+    LOW.setAxisList(axesList)
+
+    MID = MV.masked_where(MID>1.e10,MID)
+    MID.id = "mid_cloud"
+    MID.setAxisList(axesList)
+
+    HIGH = MV.masked_where(HIGH>1.e10,HIGH)
+    HIGH.id = "high_cloud"
+    HIGH.setAxisList(axesList)
+        
+    fw = cdms.open('/work/marvel1/PATTERN_EFFECT/pattern_effect/REGRIDDED_CLOUD/cmip5.ensemble.'+rn+'.r1i1pALL.ann.atm.Amon.cloudbins.ver-1.latestX.nc','w')
+    fw.write(LOW)
+    fw.write(MID)
+    fw.write(HIGH)
+    fw.history="Generated using function historical_cloud_cover in generate_lcc_from_regridded.py by Kate Marvel 8/27/17"
+    fw.close()
     
