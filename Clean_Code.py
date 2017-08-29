@@ -1,8 +1,12 @@
 import cdms2 as cdms
 import genutil,cdutil
 import numpy as np
+import MV2 as MV
 import matplotlib.pyplot as plt
 import scipy.stats as stats
+import matplotlib.cm as cm
+from mpl_toolkits.basemap import Basemap
+import string
 #Modules I wrote
 import CMIP5_tools as cmip5
 import Plotting
@@ -230,7 +234,7 @@ def estimate_ECS(typ,temperature_variable="ts"):
 
 ####### FIGURE CODE #########
 
-def Figure1(cmap=cm.Dark2):
+def Figure1(cmap=cm.magma):
     """
     Figure 1 of proposed paper
     """
@@ -390,16 +394,109 @@ def compare_ECS_and_tropicalcloud(experiment,compare_to="LCC",ensemble_average=T
     if plot:
         Plotting.scatterplot_cmip(X,Y)
         plt.title("R = "+str(np.round(float(genutil.statistics.correlation(X,Y)),2)))
-        plt.legend(loc=0,numpoints=1,ncol=3,fontsize=6)
+        plt.legend(loc=0,numpoints=1,ncol=1,fontsize=6)
         plt.xlabel(r"ECS ($^{\circ}$) estimated from "+experiment)
         plt.ylabel(r'$\Delta$ '+compare_to)
     return X,Y
 
-
+def Figure3():
+    """
+    Plot low cloud cover vs amip
+    """
+    f = cdms.open("MAPS/AMIP_LCC.nc")
+    lcc = f("lcc")
+    X = MV.average(lcc,axis=0)
+    plt.subplot(211)
+    plot_tropical_lcc(X,projection="cyl")
+    plt.title("(a): Tropical Marine Cloud Regions")
+    ax = plt.subplot(212)
+    x,y=compare_ECS_and_tropicalcloud("amip",ensemble_average=False,compare_to="LCC")
+    ax.set_title("(b) "+ax.get_title())
+    #plt.title("(b): AMIP ECS vs tropical LCC")
+    
 
 
 ####TEMPORARY EXPERIMENTAL CODE #####
+def plot_tropical_lcc(X,projection='moll'):
+    """
+    Plot stratocumulus regions off the western coasts of continents
+    """
+    if X.id == "SWCRE":
+        v=8
+        label=r'$\Delta$ SWCRE (Wm$^2$)'
+    else:
+        v=1.5
+        label=r'$\Delta$ LCC (%)'
+    Peru = cdutil.region.domain(latitude=(-30,-10),longitude=(-110,-70))
+    Namibia = cdutil.region.domain(latitude=(-30,-10),longitude=(-25,15))
+    California = cdutil.region.domain(latitude=(15,35),longitude=(-155,-115))
+    Australia = cdutil.region.domain(latitude=(-35,-15),longitude=(75,115))
+    Canaries = cdutil.region.domain(latitude=(10,30),longitude=(-50,-10))
+    lon = X.getLongitude().getBounds()[:,0]
+    lat = X.getLatitude().getBounds()[:,0]
+    
+    m = Basemap(lon_0=0,projection=projection)
+    #x,y=m(*np.meshgrid(lon,lat))
+   # m.pcolormesh(x,y,X,vmin=2,vmax=2,alpha=.3)
+    for region in [Peru,Namibia,California,Australia,Canaries]:
+        Xr = X(region)
+        lon = Xr.getLongitude().getBounds()[:,0]
+        lat = Xr.getLatitude().getBounds()[:,0]
+        x,y=m(*np.meshgrid(lon,lat))
+    #if vmin is None:
+        m.pcolormesh(x,y,Xr,vmin=-v,vmax=v)
+    m.drawcoastlines()
+    plt.colorbar(orientation='horizontal',label=label)
 
+def mask_sea_ice(X):
+    """
+    Mask areas covered by sea ice at some point (for AMIP)
+    """
+    fi = cdms.open("PATTERN_MAPS/sea_ice_for_amip.nc")
+    SI = fi("sea_ice_percent")
+    fi.close()
+    SIr = SI.regrid(X.getGrid(),regridTool='regrid2')
+    mask = SIr != 0
+    if len(X.shape)==2:
+        return MV.masked_where(mask,X)
+    elif len(X.shape)==3:
+        L = X.shape[0]
+        bigmask = np.repeat(mask.asma()[np.newaxis,:,:],L,axis=0)
+        
+        return MV.masked_where(bigmask,X)
+    else:
+        print "input array must have dimensions (time, lat, lon)"
+        raise TypeError
+def mask_land(X):
+    """
+    use observational SST land mask 
+    """
+    fl = cdms.open("PATTERN_MAPS/obs_climatology.nc")
+    obs = fl("sst")
+    mask = obs.mask
+    fl.close()
+    if len(X.shape)==2:
+        return MV.masked_where(mask,X)
+    elif len(X.shape)==3:
+        L = X.shape[0]
+        bigmask = np.repeat(mask[np.newaxis,:,:],L,axis=0)
+        
+        return MV.masked_where(bigmask,X)
+    else:
+        print "input array must have dimensions (time, lat, lon)"
+        raise TypeError   
+
+
+def sst_patterns(experiment,land=False,sea_ice=False):
+    variable = "ts"#REPLACE WITH TS!!!!!!!!!
+    f = cdms.open("PATTERN_MAPS/"+experiment+"."+variable+".nc") #REPLACE WITH TS!!!!!!!!!
+    tspatt = f(variable)
+    f.close()
+    if land is False:
+        tspatt = mask_land(tspatt)
+    if sea_ice is False:
+        tspatt = mask_sea_ice(tspatt)
+    return tspatt
 
 def plot_single_model(X,Y,model):
     Xdict = cmip5.ensemble_dictionary(X)
@@ -412,7 +509,67 @@ def plot_single_model(X,Y,model):
     c=Plotting.model_dictionary()[model]["color"]
     plt.plot(Xplot,Yplot,m,color=c)
 
+def highest_sensitivity_patterns(model):
+    historicalsst=sst_patterns("historical")
+    dict = cmip5.ensemble_dictionary(historicalsst)
+    historical = estimate_ECS("historical")
+    xi=dict[model]
+    imax=np.argmax(historical.asma()[xi])
+    print cmip5.models(historicalsst)[xi[imax]]
+    return historicalsst[xi[imax]]
+
+def average_high_sens_patterns():
+    historicalsst=sst_patterns("historical",land=True,sea_ice=True)
+    dict = cmip5.ensemble_dictionary(historicalsst)
+    models = sorted(dict.keys())
+    historical = estimate_ECS("historical")
+    H = MV.zeros((len(models),)+historicalsst.shape[1:])+1.e20
+    for i in range(len(models)):
+        model=models[i]
+        xi=dict[model]
+        if len(xi)>3:
+            print i
+            imax=np.argmax(historical.asma()[xi])
+            H[i]=historicalsst[xi[imax]]
+            
+    H = MV.masked_where(H>1.e10,H)
+    #Ha = MV.average(H,axis=0)
+    H.setAxis(0,cmip5.make_model_axis(models))
+    H.setAxis(1,historicalsst.getLatitude())
+    H.setAxis(2,historicalsst.getLongitude())
+    return H
+
+def average_low_sens_patterns():
+    historicalsst=sst_patterns("historical",land=True,sea_ice=True)
+    dict = cmip5.ensemble_dictionary(historicalsst)
+    models = sorted(dict.keys())
+    historical = estimate_ECS("historical")
+    H = MV.zeros((len(models),)+historicalsst.shape[1:])+1.e20
+    for i in range(len(models)):
+        model=models[i]
+        xi=dict[model]
+        if len(xi)>3:
+            print i
+            imin=np.argmin(historical.asma()[xi])
+            H[i]=historicalsst[xi[imin]]
+            
+    H = MV.masked_where(H>1.e10,H)
+    #Ha = MV.average(H,axis=0)
+    H.setAxis(0,cmip5.make_model_axis(models))
+    H.setAxis(1,historicalsst.getLatitude())
+    H.setAxis(2,historicalsst.getLongitude())
+    return H
     
+
+def lowest_sensitivity_patterns(model):
+    historicalsst=sst_patterns("historical")
+    dict = cmip5.ensemble_dictionary(historicalsst)
+    historical = estimate_ECS("historical")
+    xi=dict[model]
+    imin=np.argmin(historical.asma()[xi])
+    print cmip5.models(historicalsst)[xi[imin]]
+    return historicalsst[xi[imin]]
+        
 def southern_ocean_lcc(X):
     return cdutil.averager(X(latitude=(-90,-50)),axis='xy')
         

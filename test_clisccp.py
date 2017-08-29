@@ -5,6 +5,9 @@ import numpy as np
 import MV2 as MV
 import difflib
 import pickle
+import matplotlib.cm as cm
+from mpl_toolkits.basemap import Basemap
+import string
 #import ENSO_years_piControl as en
 
 global crunchy
@@ -117,7 +120,7 @@ def low_cloud_abrupt_diff(clisccp):
 def ensemble_ABRUPT_LCC():
     direc = "/work/cmip5/abrupt4xCO2/atm/mo/clisccp/"
     variable="clisccp"
-    ABRUPT_LCC = cmip5.get_ensemble(direc,variable,func=low_cloud_abrupt_diff)
+    ABRUPT_LCC = cmip5.get_ensemble(direc,variable,func=low_cloud_abrupt_diff,search_string = "*r1*")
     ABRUPT_LCC.id = "lcc"
     f = cdms.open("ABRUPT_LCC.nc","w")
     f.write(ABRUPT_LCC)
@@ -372,7 +375,7 @@ def tropical_marine_lcc_klein(X):
     Peru = cdutil.region.domain(latitude=(-20,-10),longitude=(-90,-80))
     Namibia = cdutil.region.domain(latitude=(-20,-10),longitude=(0,10))
     California = cdutil.region.domain(latitude=(20,30),longitude=(-130,-120))
-    Australia = cdutil.region.domain(latitude=(-35,-25),longitude=(95,105))
+    Australia = cdutil.region.domain(latitude=(-35,-15),longitude=(95,105))
     Canaries = cdutil.region.domain(latitude=(15,25),longitude=(-35,-25))
     return cdutil.averager(X(Peru),axis='xy')+cdutil.averager(X(Namibia),axis='xy')+cdutil.averager(X(California),axis='xy')+cdutil.averager(X(Australia),axis='xy')+cdutil.averager(X(Canaries),axis='xy')
 
@@ -383,7 +386,7 @@ def tropical_marine_lcc_qu(X):
     Peru = cdutil.region.domain(latitude=(-30,-10),longitude=(-110,-70))
     Namibia = cdutil.region.domain(latitude=(-30,-10),longitude=(-25,15))
     California = cdutil.region.domain(latitude=(15,35),longitude=(-155,-115))
-    Australia = cdutil.region.domain(latitude=(-35,-25),longitude=(75,115))
+    Australia = cdutil.region.domain(latitude=(-35,-15),longitude=(75,115))
     Canaries = cdutil.region.domain(latitude=(10,30),longitude=(-50,-10))
     
     return cdutil.averager(X(Peru),axis='xy')+cdutil.averager(X(Namibia),axis='xy')+cdutil.averager(X(California),axis='xy')+cdutil.averager(X(Australia),axis='xy')+cdutil.averager(X(Canaries),axis='xy')
@@ -397,7 +400,7 @@ def plot_tropical_lcc(X,projection='moll'):
     Peru = cdutil.region.domain(latitude=(-30,-10),longitude=(-110,-70))
     Namibia = cdutil.region.domain(latitude=(-30,-10),longitude=(-25,15))
     California = cdutil.region.domain(latitude=(15,35),longitude=(-155,-115))
-    Australia = cdutil.region.domain(latitude=(-35,-25),longitude=(75,115))
+    Australia = cdutil.region.domain(latitude=(-35,-15),longitude=(75,115))
     Canaries = cdutil.region.domain(latitude=(10,30),longitude=(-50,-10))
     lon = X.getLongitude().getBounds()[:,0]
     lat = X.getLatitude().getBounds()[:,0]
@@ -553,6 +556,17 @@ def mask_land(X):
         print "input array must have dimensions (time, lat, lon)"
         raise TypeError   
 
+
+def sst_patterns(experiment,land=False,sea_ice=False):
+    variable = "ts"#REPLACE WITH TS!!!!!!!!!
+    f = cdms.open("PATTERN_MAPS/"+experiment+"."+variable+".nc") #REPLACE WITH TS!!!!!!!!!
+    tspatt = f(variable)
+    f.close()
+    if land is False:
+        tspatt = mask_land(tspatt)
+    if sea_ice is False:
+        tspatt = mask_sea_ice(tspatt)
+    return tspatt
 def compare_ts_patterns(experiment="historical",func="covariance",mask_all=True):
    
 
@@ -590,7 +604,7 @@ def compare_ts_patterns(experiment="historical",func="covariance",mask_all=True)
     for i in range(nmod):
         model = experiment_models[i]
         trunc = model.split(".")[1]
-        print trunc
+       
         if trunc.find("GISS")<0:
             trunc=trunc
         else:
@@ -607,8 +621,91 @@ def compare_ts_patterns(experiment="historical",func="covariance",mask_all=True)
             bad += [trunc]
     C = MV.masked_where(C>1.e10,C)
     C.setAxis(0,tspatt.getAxis(0))
-    return C, bad
-            
+    return C,bad
+
+def correlation_histograms(func = "correlation",cmap=cm.magma):
+    Ch,badh = compare_ts_patterns(experiment="historical",func= func,mask_all=True)
+    Ca,bada = compare_ts_patterns(experiment="amip",func= func,mask_all=True)
+    
+    plt.subplot(211)
+    plt.hist(Ch.compressed(),color=cmap(.3),ec=cmap(.3),alpha=.7,label="Historical")
+    plt.hist(Ca.compressed(),color=cmap(.6),ec=cmap(.6),alpha=.7,label="AMIP")
+    plt.title(func+" with model's own abrupt4xCO2 pattern")
+    plt.legend()
+    plt.subplot(212)
+    plt.title(func+" with multimodel mean abrupt4xCO2 pattern")
+    abruptsst = sst_patterns("abrupt4xCO2")
+    abrupt_avg = MV.average(abruptsst,axis=0)
+
+    historicalsst = sst_patterns("historical")
+    historical_avg = MV.average(historicalsst,axis=0)
+    
+    amipsst = sst_patterns("amip")
+    amip_avg = MV.average(amipsst,axis=0)
+    
+    historical_corr_with_mean=np.array([float(getattr(genutil.statistics,func)(historicalsst[i],abrupt_avg,axis='xy')) for i in range(historicalsst.shape[0])])
+    historical_corr_with_mean=MV.array(np.ma.masked_where(np.isnan(historical_corr_with_mean),historical_corr_with_mean))
+    historical_corr_with_mean.setAxis(0,Ch.getAxis(0))
+     
+    amip_corr_with_mean=np.array([float(getattr(genutil.statistics,func)(amipsst[i],abrupt_avg,axis='xy')) for i in range(amipsst.shape[0])])
+    amip_corr_with_mean=MV.array(np.ma.masked_where(np.isnan(amip_corr_with_mean),amip_corr_with_mean))
+    amip_corr_with_mean.setAxis(0,Ca.getAxis(0))
+
+    plt.hist(historical_corr_with_mean.compressed(),color=cmap(.3),ec=cmap(.3),alpha=.7)
+    plt.hist(amip_corr_with_mean.compressed(),color=cmap(.6),ec=cmap(.6),alpha=.7)
+
+    return Ch,historical_corr_with_mean,Ca,amip_corr_with_mean
+import Clean_Code as cc
+def equil_minus_hist_ecs():
+    historical = cc.estimate_ECS("historical")
+    equil=cc.estimate_ECS("equil")
+    models = cmip5.models(historical)
+    eqmodels = cmip5.models(equil)
+    L = len(models)
+    df = MV.zeros(L)+1.e20
+    for i in range(L):
+        trunc = models[i].split(".")[1]
+        if trunc in eqmodels:
+            df[i] = equil[eqmodels.index(trunc)] - historical[i]
+    df = MV.masked_where(df>1.e10,df)
+    df.setAxis(0,historical.getAxis(0))
+    return df
+    
+    
+    
+def SO_historical_vs_SO_abrupt(latbounds=(-90,-50),land=False,sea_ice=True):
+    historical = cdutil.averager(sst_patterns("historical",land=land,sea_ice=sea_ice)(latitude=latbounds),axis='xy')
+    equil=cdutil.averager(sst_patterns("abrupt4xCO2",land=land,sea_ice=sea_ice)(latitude=latbounds),axis='xy')
+    models = cmip5.models(historical)
+    eqmodels = [x.split(".")[1] for x in cmip5.models(equil)]
+    L = len(models)
+    df = MV.zeros(L)+1.e20
+    for i in range(L):
+        trunc = models[i].split(".")[1]
+        if trunc in eqmodels:
+            df[i] = equil[eqmodels.index(trunc)] - historical[i]
+    df = MV.masked_where(df>1.e10,df)
+    df.setAxis(0,historical.getAxis(0))
+    return df
+
+def play_with_SO(latbounds):
+    sodiff = SO_historical_vs_SO_abrupt(latbounds=latbounds)
+    tdiff = equil_minus_hist_ecs()
+    plt.subplot(211)
+    Plotting.scatterplot_cmip(tdiff,sodiff)
+    plt.title(str(genutil.statistics.correlation(tdiff.asma(),sodiff)))
+
+    tdiff_ensav=cmip5.ensemble2multimodel(tdiff)
+    sodiff_ensav=cmip5.ensemble2multimodel(sodiff)
+    plt.subplot(212)
+    Plotting.scatterplot_cmip(tdiff_ensav,sodiff_ensav)
+    plt.title(str(genutil.statistics.correlation(tdiff_ensav.asma(),sodiff_ensav)))
+
+    
+    
+    
+
+          
 
     
 
