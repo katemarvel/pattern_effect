@@ -130,7 +130,7 @@ def historical_cloud_cover(rn):
         fname = afiles[i]
         try:
             f = cdms.open(fname)
-            clisccp =  f("pgrid_cl")(time='1979-1-1','2005-12-31')
+            clisccp =  f("pgrid_cl")(time=('1979-1-1','2005-12-31'))
             low,mid,high = bin_cloud_cover(clisccp)
             LOW[i] = low
             MID[i] = mid
