@@ -8,6 +8,7 @@ import pickle
 import matplotlib.cm as cm
 from mpl_toolkits.basemap import Basemap
 import string
+import os
 #import ENSO_years_piControl as en
 import CMIP5_tools as cmip5
 
