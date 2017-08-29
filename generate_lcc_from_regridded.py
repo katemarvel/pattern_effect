@@ -54,7 +54,7 @@ def abrupt_cloud_cover():
     path = "/kate/cl_regrid_isccp/abrupt4xCO2/"
     files = glob.glob(path+"*r1i**xml")
     afiles=sorted(cmip5.only_most_recent(files))
-     if crunchy:
+    if crunchy:
         fobs = cdms.open("/work/marvel1/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
     else:
         fobs = cdms.open("/Users/kmarvel/Google Drive/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
