@@ -122,7 +122,7 @@ def historical_cloud_cover(rn):
     the_grid = fobs["clt"].getGrid()
     L = len(afiles)
     LOW = MV.zeros((L,27)+the_grid.shape)+1.e20
-    MID = MV.zeros((L,127)+the_grid.shape)+1.e20
+    MID = MV.zeros((L,27)+the_grid.shape)+1.e20
     HIGH = MV.zeros((L,27)+the_grid.shape)+1.e20
     fobs.close()
     
