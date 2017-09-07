@@ -58,7 +58,22 @@ def last_ten_minus_first_ten(X):
     diff_ten.setAxisList(for_axes.getAxisList())
     return diff_ten
 
+def last_thirty_minus_first_thirty(X):
+    axis = X.getAxisIds().index('time')
+    for_axes = MV.average(X,axis=axis)
+    first30 = [slice(None)] * len(X.shape)
+    first30[axis]=slice(0,30)
+    average_first30 = MV.average(X.asma()[first30],axis=axis)
 
+    last30 = [slice(None)] * len(X.shape)
+    nt = X.shape[axis]
+    
+    last30[axis]=slice(nt-30,nt)
+    average_last30 = MV.average(X.asma()[last30],axis=axis)
+
+    diff_30 = average_last30-average_first30
+    diff_30.setAxisList(for_axes.getAxisList())
+    return diff_30
 def low_cloud_diff(clisccp):
     #f=cdms.open(fname)
     #clisccp = f("clisccp")
@@ -157,6 +172,18 @@ def rsut_diff(X):
     the_diff_regrid = the_diff.regrid(the_grid,regridTool='regrid2')
     fobs.close()
     return the_diff_regrid
+
+def rsut_diff_abrupt(X):
+    
+    Xt=X[0:12*140]
+    cdutil.setTimeBoundsMonthly(X)
+    the_diff= last_ten_minus_first_ten(cdutil.YEAR(X))
+
+    fobs = cdms.open("/work/marvel1/CLOUD_SEASONS/cloud-seasons/CLOUD_OBS/clt_ISCCP_corrected_198301-200912.nc")
+    the_grid = fobs["clt"].getGrid()
+    the_diff_regrid = the_diff.regrid(the_grid,regridTool='regrid2')
+    fobs.close()
+    return the_diff_regrid
     
 def ensemble_AMIP_RSUT():
     direc = "/work/cmip5/amip/atm/mo/rsut/"
@@ -198,8 +225,51 @@ def ensemble_HISTORICAL_RSUTCS():
     f.close()
     return HISTORICAL_RSUTCS
 
+def ensemble_ABRUPT_RSUT():
+    direc = "/work/cmip5/abrupt4xCO2/atm/mo/rsut/"
+    variable="rsut"
+    ABRUPT_RSUT = cmip5.get_ensemble(direc,variable,func=rsut_diff_abrupt)
+    ABRUPT_RSUT.id = "rsut"
+    f = cdms.open("ABRUPT_RSUT.nc","w")
+    f.write(ABRUPT_RSUT)
+    f.close()
+    return ABRUPT_RSUT
+
+def ensemble_ABRUPT_RSUTCS():
+    direc = "/work/cmip5/abrupt4xCO2/atm/mo/rsutcs/"
+    variable="rsutcs"
+    ABRUPT_RSUTCS = cmip5.get_ensemble(direc,variable,func=rsut_diff_abrupt)
+    ABRUPT_RSUTCS.id = "rsutcs"
+    f = cdms.open("ABRUPT_RSUTCS.nc","w")
+    f.write(ABRUPT_RSUTCS)
+    f.close()
+    return ABRUPT_RSUTCS
+
 #HISTORICAL_RSUT = ensemble_HISTORICAL_RSUT()
 #HISTORICAL_RSUTCS = ensemble_HISTORICAL_RSUTCS()
+
+def abrupt_SWCRE(ABRUPT_RSUT,ABRUPT_RSUTCS):
+      allsmod_hist=np.array([x.split("/")[-1].split("rsut")[0] for x in eval(ABRUPT_RSUT.getAxis(0).models)])
+      csmod_hist=np.array([x.split("/")[-1].split("rsutcs")[0] for x in eval(ABRUPT_RSUTCS.getAxis(0).models)])
+      common_models = np.intersect1d(allsmod_hist,csmod_hist)
+      nmod=len(common_models)
+      ABRUPT_SWCRE = MV.zeros((nmod,)+ABRUPT_RSUTCS.shape[1:])
+      counter=0
+      for model in common_models:
+            i = allsmod_hist.tolist().index(model)
+            j = csmod_hist.tolist().index(model)
+            ABRUPT_SWCRE[counter]=ABRUPT_RSUT[i] - ABRUPT_RSUTCS[j]
+            counter+=1
+      ABRUPT_SWCRE.setAxis(1,ABRUPT_RSUT.getLatitude())
+      ABRUPT_SWCRE.setAxis(2,ABRUPT_RSUT.getLongitude())
+      modax = cmip5.make_model_axis(np.array(common_models).tolist())
+      ABRUPT_SWCRE.setAxis(0,modax)
+      ABRUPT_SWCRE.id="SWCRE"
+      f = cdms.open("ABRUPT_SWCRE.nc","w")
+      f.write(ABRUPT_SWCRE)
+      f.close()
+      return ABRUPT_SWCRE
+
 def historical_SWCRE(HISTORICAL_RSUT,HISTORICAL_RSUTCS):
       allsmod_hist=np.array([x.split("/")[-1].split("rsut")[0] for x in eval(HISTORICAL_RSUT.getAxis(0).models)])
       csmod_hist=np.array([x.split("/")[-1].split("rsutcs")[0] for x in eval(HISTORICAL_RSUTCS.getAxis(0).models)])
@@ -557,33 +627,52 @@ def mask_land(X):
         raise TypeError   
 
 
-def sst_patterns(experiment,land=False,sea_ice=False):
+def sst_patterns(experiment,mask_the_land=True,mask_the_ice=True,remove_global_mean=True):
     variable = "ts"#REPLACE WITH TS!!!!!!!!!
     f = cdms.open("PATTERN_MAPS/"+experiment+"."+variable+".nc") #REPLACE WITH TS!!!!!!!!!
     tspatt = f(variable)
     f.close()
-    if land is False:
+    if mask_the_land:
         tspatt = mask_land(tspatt)
-    if sea_ice is False:
+    if mask_the_ice:
         tspatt = mask_sea_ice(tspatt)
+    if remove_global_mean:
+        globav=cdutil.averager(tspatt,axis='xy')
+        tspatt = cmip5.cdms_clone(tspatt.asma()-globav.asma()[:,np.newaxis,np.newaxis],tspatt)
     return tspatt
-def compare_ts_patterns(experiment="historical",func="covariance",mask_all=True):
+def compare_ts_patterns(experiment="historical",func="covariance",mask_the_land=True,mask_the_ice=True,remove_global_mean=True,latbounds=(-90,90),lonbounds=(0,360)):
    
 
-    variable = "ts"#REPLACE WITH TS!!!!!!!!!
-    f = cdms.open("PATTERN_MAPS/"+experiment+"."+variable+".nc") #REPLACE WITH TS!!!!!!!!!
-    tspatt = f(variable)
+    variable = "ts"
+    f = cdms.open("PATTERN_MAPS/"+experiment+"."+variable+".nc") 
+    ts = f(variable)
+    if mask_the_land:
+        ts = mask_land(ts)
+    if mask_the_ice:
+        ts = mask_sea_ice(ts)
     f.close()
+    #remove global mean
+    if remove_global_mean:
+        globav=cdutil.averager(ts,axis='xy')
+        tspatt = cmip5.cdms_clone(ts.asma()-globav.asma()[:,np.newaxis,np.newaxis],ts)
+    else:
+        tspatt=ts
 
-    
     fa  = cdms.open("PATTERN_MAPS/abrupt4xCO2.ts.nc")
     abrupt = fa("ts")
+    if mask_the_land:
+        abrupt = mask_land(abrupt)
+    if mask_the_ice:
+        abrupt=mask_sea_ice(abrupt)
+        
+    if remove_global_mean:
+        globav=cdutil.averager(abrupt,axis='xy')
+        abrupt = cmip5.cdms_clone(abrupt.asma()-globav.asma()[:,np.newaxis,np.newaxis],abrupt)
     fa.close()
 
-    if mask_all:
-        abrupt = mask_land(mask_sea_ice(abrupt))
-        tspatt = mask_land(mask_sea_ice(tspatt))
-
+   
+    tspatt = tspatt(latitude=latbounds,longitude=lonbounds)
+    abrupt = abrupt(latitude=latbounds,longitude=lonbounds)
     experiment_models = cmip5.models(tspatt)
     
     abrupt_models=cmip5.models(abrupt)
@@ -623,9 +712,9 @@ def compare_ts_patterns(experiment="historical",func="covariance",mask_all=True)
     C.setAxis(0,tspatt.getAxis(0))
     return C,bad
 
-def correlation_histograms(func = "correlation",cmap=cm.magma):
-    Ch,badh = compare_ts_patterns(experiment="historical",func= func,mask_all=True)
-    Ca,bada = compare_ts_patterns(experiment="amip",func= func,mask_all=True)
+def correlation_histograms(func = "correlation",cmap=cm.magma,mask_the_land=True,mask_the_ice=True):
+    Ch,badh = compare_ts_patterns(experiment="historical",func= func,mask_the_land=mask_the_land,mask_the_ice=mask_the_ice)
+    Ca,bada = compare_ts_patterns(experiment="amip",func= func,mask_the_land=mask_the_land,mask_the_ice=mask_the_ice)
     
     plt.subplot(211)
     plt.hist(Ch.compressed(),color=cmap(.3),ec=cmap(.3),alpha=.7,label="Historical")
@@ -634,13 +723,13 @@ def correlation_histograms(func = "correlation",cmap=cm.magma):
     plt.legend()
     plt.subplot(212)
     plt.title(func+" with multimodel mean abrupt4xCO2 pattern")
-    abruptsst = sst_patterns("abrupt4xCO2")
+    abruptsst = sst_patterns("abrupt4xCO2",mask_the_land=mask_the_land,mask_the_ice=mask_the_ice)
     abrupt_avg = MV.average(abruptsst,axis=0)
 
-    historicalsst = sst_patterns("historical")
+    historicalsst = sst_patterns("historical",remove_global_mean=True,mask_the_land=mask_the_land,mask_the_ice=mask_the_ice)
     historical_avg = MV.average(historicalsst,axis=0)
     
-    amipsst = sst_patterns("amip")
+    amipsst = sst_patterns("amip",remove_global_mean=True,mask_the_land=mask_the_land,mask_the_ice=mask_the_ice)
     amip_avg = MV.average(amipsst,axis=0)
     
     historical_corr_with_mean=np.array([float(getattr(genutil.statistics,func)(historicalsst[i],abrupt_avg,axis='xy')) for i in range(historicalsst.shape[0])])
@@ -673,15 +762,42 @@ def equil_minus_hist_ecs():
     
     
     
-def SO_historical_vs_SO_abrupt(latbounds=(-90,-50),land=False,sea_ice=True):
-    historical = cdutil.averager(sst_patterns("historical",land=land,sea_ice=sea_ice)(latitude=latbounds),axis='xy')
-    equil=cdutil.averager(sst_patterns("abrupt4xCO2",land=land,sea_ice=sea_ice)(latitude=latbounds),axis='xy')
+def SO_historical_vs_SO_abrupt(latbounds=(-90,-50),mask_all=False,remove_global_mean=True):
+
+    experiment="historical"
+    variable = "ts"
+    f = cdms.open("PATTERN_MAPS/"+experiment+"."+variable+".nc") 
+    ts = f(variable)
+    if mask_all:
+        ts = mask_land(mask_sea_ice(ts))
+    f.close()
+    #remove global mean
+    if remove_global_mean:
+        globav=cdutil.averager(ts,axis='xy')
+        historical = cmip5.cdms_clone(ts.asma()-globav.asma()[:,np.newaxis,np.newaxis],ts)
+    else:
+        historical=ts
+
+    fa  = cdms.open("PATTERN_MAPS/abrupt4xCO2.ts.nc")
+    equil = fa("ts")
+    if mask_all:
+        equil = mask_land(mask_sea_ice(equil))
+    if remove_global_mean:
+        globav=cdutil.averager(equil,axis='xy')
+        equil = cmip5.cdms_clone(equil.asma()-globav.asma()[:,np.newaxis,np.newaxis],equil)
+    fa.close()
+
+    equil=cdutil.averager(equil(latitude=latbounds),axis='xy')
+    historical = cdutil.averager(historical(latitude=latbounds),axis='xy')
+    
+
     models = cmip5.models(historical)
     eqmodels = [x.split(".")[1] for x in cmip5.models(equil)]
     L = len(models)
     df = MV.zeros(L)+1.e20
     for i in range(L):
         trunc = models[i].split(".")[1]
+       
         if trunc in eqmodels:
             df[i] = equil[eqmodels.index(trunc)] - historical[i]
     df = MV.masked_where(df>1.e10,df)
@@ -703,10 +819,12 @@ def play_with_SO(latbounds):
 
     
     
+def check_amip_lcc():
+    f = cdms.open("REGRIDDED_CLOUD/cmip5.ensemble.amip.r1i1pALL.ann.atm.Amon.cloudbins.ver-1.latestX.nc")
+    lcc = 100*(f("low_cloud")+f("mid_cloud"))
+    lcc_diff = last_ten_minus_first_ten(lcc)
     
-
-          
-
+ 
     
 
         
