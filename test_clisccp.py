@@ -94,14 +94,15 @@ def low_cloud_diff(clisccp):
     return the_diff_regrid
 
 
-def low_cloud_diff(clisccp):
+def low_cloud_diff(clisccp,thresh=680):
     #f=cdms.open(fname)
     #clisccp = f("clisccp")
+     print "THRESHOLD = "+str(thresh)
     axes = clisccp.getAxisIds()
     tau_ax = axes.index("tau")
     clisccp_all_od = MV.sum(clisccp,axis=tau_ax)
     plev_ax = clisccp_all_od.getAxisIds().index("plev")
-    low = MV.sum(clisccp_all_od(level=(1000*100,440.*100)),axis=plev_ax)(time=('1979-1-1','2005-12-31'))
+    low = MV.sum(clisccp_all_od(level=(1000*100,thresh*100.)),axis=plev_ax)(time=('1979-1-1','2005-12-31'))
     cdutil.setTimeBoundsMonthly(low)
     the_diff= last_ten_minus_first_ten(cdutil.YEAR(low))
     if crunchy:
@@ -113,14 +114,15 @@ def low_cloud_diff(clisccp):
     fobs.close()
     return the_diff_regrid
 
-def low_cloud_abrupt_diff(clisccp):
+def low_cloud_abrupt_diff(clisccp,thresh=680):
     #f=cdms.open(fname)
     #clisccp = f("clisccp")
+    print "THRESHOLD = "+str(thresh)
     axes = clisccp.getAxisIds()
     tau_ax = axes.index("tau")
     clisccp_all_od = MV.sum(clisccp,axis=tau_ax)
     plev_ax = clisccp_all_od.getAxisIds().index("plev")
-    low = MV.sum(clisccp_all_od(level=(1000*100,440.*100)),axis=plev_ax)#(time=('1979-1-1','2005-12-31'))
+    low = MV.sum(clisccp_all_od(level=(1000*100,thresh*100)),axis=plev_ax)#(time=('1979-1-1','2005-12-31'))
     cdutil.setTimeBoundsMonthly(low)
     the_diff= MV.average(low[130*12:140*12],axis=0)-MV.average(low[0*12:10*12],axis=0)
     if crunchy:
@@ -132,31 +134,31 @@ def low_cloud_abrupt_diff(clisccp):
     fobs.close()
     return the_diff_regrid
 
-def ensemble_ABRUPT_LCC():
+def ensemble_ABRUPT_LCC(thresh):
     direc = "/work/cmip5/abrupt4xCO2/atm/mo/clisccp/"
     variable="clisccp"
-    ABRUPT_LCC = cmip5.get_ensemble(direc,variable,func=low_cloud_abrupt_diff,search_string = "*r1*")
+    ABRUPT_LCC = cmip5.get_ensemble(direc,variable,func=low_cloud_abrupt_diff,search_string = "*r1*", thresh=thresh)
     ABRUPT_LCC.id = "lcc"
     f = cdms.open("ABRUPT_LCC.nc","w")
     f.write(ABRUPT_LCC)
     f.close()
     return ABRUPT_LCC
 
-def ensemble_AMIP_LCC():
+def ensemble_AMIP_LCC(thresh):
     direc = "/work/cmip5/amip/atm/mo/clisccp/"
     variable="clisccp"
-    AMIP_LCC = cmip5.get_ensemble(direc,variable,func=low_cloud_diff)
+    AMIP_LCC = cmip5.get_ensemble(direc,variable,func=low_cloud_diff,thresh=thresh)
     AMIP_LCC.id = "lcc"
-    f = cdms.open("AMIP_LCC.nc","w")
+    f = cdms.open("AMIP_LCC_"+str(thresh)+".nc","w")
     f.write(AMIP_LCC)
     f.close()
     return AMIP_LCC
-def ensemble_HISTORICAL_LCC():
+def ensemble_HISTORICAL_LCC(thresh):
     direc = "/work/cmip5/historical/atm/mo/clisccp/"
     variable="clisccp"
-    HISTORICAL_LCC = cmip5.get_ensemble(direc,variable,func=low_cloud_diff)
+    HISTORICAL_LCC = cmip5.get_ensemble(direc,variable,func=low_cloud_diff, thresh=thresh)
     HISTORICAL_LCC.id = "lcc"
-    f = cdms.open("HISTORICAL_LCC.nc","w")
+    f = cdms.open("HISTORICAL_LCC_"+str(thresh)+".nc","w")
     f.write(HISTORICAL_LCC)
     f.close()
     return HISTORICAL_LCC
@@ -228,7 +230,7 @@ def ensemble_HISTORICAL_RSUTCS():
 def ensemble_ABRUPT_RSUT():
     direc = "/work/cmip5/abrupt4xCO2/atm/mo/rsut/"
     variable="rsut"
-    ABRUPT_RSUT = cmip5.get_ensemble(direc,variable,func=rsut_diff_abrupt)
+    ABRUPT_RSUT = cmip5.get_ensemble(direc,variable,func=rsut_diff_abrupt,search_string="*r1i1*")
     ABRUPT_RSUT.id = "rsut"
     f = cdms.open("ABRUPT_RSUT.nc","w")
     f.write(ABRUPT_RSUT)
@@ -238,7 +240,7 @@ def ensemble_ABRUPT_RSUT():
 def ensemble_ABRUPT_RSUTCS():
     direc = "/work/cmip5/abrupt4xCO2/atm/mo/rsutcs/"
     variable="rsutcs"
-    ABRUPT_RSUTCS = cmip5.get_ensemble(direc,variable,func=rsut_diff_abrupt)
+    ABRUPT_RSUTCS = cmip5.get_ensemble(direc,variable,func=rsut_diff_abrupt,search_string="*r1i1*")
     ABRUPT_RSUTCS.id = "rsutcs"
     f = cdms.open("ABRUPT_RSUTCS.nc","w")
     f.write(ABRUPT_RSUTCS)
