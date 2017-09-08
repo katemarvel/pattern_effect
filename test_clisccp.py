@@ -97,7 +97,7 @@ def low_cloud_diff(clisccp):
 def low_cloud_diff(clisccp,thresh=680):
     #f=cdms.open(fname)
     #clisccp = f("clisccp")
-     print "THRESHOLD = "+str(thresh)
+    print "THRESHOLD = "+str(thresh)
     axes = clisccp.getAxisIds()
     tau_ax = axes.index("tau")
     clisccp_all_od = MV.sum(clisccp,axis=tau_ax)
